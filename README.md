@@ -1,6 +1,8 @@
 # ocmirror
 OpenContrail mirrored packet reader/forwarder
 
+This can be used with OpenContrail when setting a Service Instance with a mirroring policy. This tool aims to parse encapsulated packets and forward inner packet to another interface so that external analyzer tool can be use.
+
 Usage
 =====
 
