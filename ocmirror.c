@@ -422,7 +422,7 @@ main (int argc, char **argv)
   struct sockaddr_ll fout;
   int fsock = 0, usock = 0;
   int verbose = 0, a2i, c, i;
-  unsigned short port = 9999;
+  unsigned short port = 8159;
   const char *intf;
   char *end;
 
