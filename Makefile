@@ -2,7 +2,7 @@ CC=gcc
 
 all: ocmirror
 
-ocmirror.o:
+ocmirror.o: ocmirror.c Makefile
 	$(CC) -O3 -c ocmirror.c
 
 ocmirror: ocmirror.o

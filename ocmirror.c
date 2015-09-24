@@ -43,6 +43,12 @@
 
 enum
 {
+  TEXT_OUTPUT = 1,
+  JSON_OUTPUT
+};
+
+enum
+{
   IPV4 = 4,
   IPV6 = 6
 };
@@ -236,90 +242,127 @@ get_protocol (unsigned char protocol)
 }
 
 void
-print_pkt (const char *pkt, unsigned int len)
+print_pkt (const char *pkt, unsigned int len, int verbose)
 {
   struct ether_header *ether;
   struct ip *ip_hdr;
   const unsigned char *src, *dst;
   unsigned short type;
   char ip_src[BUFSIZ], ip_dst[BUFSIZ];
+  int af;
 
   ether = (struct ether_header *) pkt;
 
   src = ether->ether_shost;
   dst = ether->ether_dhost;
   type = ntohs (ether->ether_type);
-  printf ("\t\t\t\t"
-          "%02x:%02x:%02x:%02x:%02x:%02x > "
-          "%02x:%02x:%02x:%02x:%02x:%02x, "
-          "ethertype %s (%#.4x), length: %d\n",
-          src[0] & 0xff, src[1] & 0xff, src[2] & 0xff,
-          src[3] & 0xff, src[4] & 0xff, src[5] & 0xff,
-          dst[0] & 0xff, dst[1] & 0xff, dst[2] & 0xff,
-          dst[3] & 0xff, dst[4] & 0xff, dst[5] & 0xff,
-          get_ether_type (type), type, len);
+  if (verbose == JSON_OUTPUT) {
+    printf ("\"hw_src\": \"%02x:%02x:%02x:%02x:%02x:%02x\", "
+            "\"hw_dst\": \"%02x:%02x:%02x:%02x:%02x:%02x\", "
+            "\"ethertype\": \"%s (%#.4x)\", \"length\": %d, ",
+            src[0] & 0xff, src[1] & 0xff, src[2] & 0xff,
+            src[3] & 0xff, src[4] & 0xff, src[5] & 0xff,
+            dst[0] & 0xff, dst[1] & 0xff, dst[2] & 0xff,
+            dst[3] & 0xff, dst[4] & 0xff, dst[5] & 0xff,
+            get_ether_type (type), type, len);
+  } else {
+    printf ("\t"
+            "%02x:%02x:%02x:%02x:%02x:%02x > "
+            "%02x:%02x:%02x:%02x:%02x:%02x, "
+            "ethertype %s (%#.4x), length: %d\n",
+            src[0] & 0xff, src[1] & 0xff, src[2] & 0xff,
+            src[3] & 0xff, src[4] & 0xff, src[5] & 0xff,
+            dst[0] & 0xff, dst[1] & 0xff, dst[2] & 0xff,
+            dst[3] & 0xff, dst[4] & 0xff, dst[5] & 0xff,
+            get_ether_type (type), type, len);
+  }
 
-  switch (type) {
-  case ETHERTYPE_IP:
-    ip_hdr = (struct ip *) (pkt + sizeof (struct ether_header));
-    printf ("\t\t\t\t"
-            "%s > %s length: %d, protocol: %s\n",
-            inet_ntop (AF_INET, &(ip_hdr->ip_src), ip_src, sizeof (ip_src)),
-            inet_ntop (AF_INET, &(ip_hdr->ip_dst), ip_dst, sizeof (ip_dst)),
+  if (type == ETHERTYPE_IP) {
+    af = AF_INET;
+  } else {
+    af = AF_INET6;
+  }
+
+  ip_hdr = (struct ip *) (pkt + sizeof (struct ether_header));
+  if (verbose == JSON_OUTPUT) {
+    printf ("\"ip_src\": \"%s\", \"ip_dst\": \"%s\", "
+            "\"length\": %d, \"protocol\": \"%s\"",
+            inet_ntop (af, &(ip_hdr->ip_src), ip_src, sizeof (ip_src)),
+            inet_ntop (af, &(ip_hdr->ip_dst), ip_dst, sizeof (ip_dst)),
             ntohs (ip_hdr->ip_len), get_protocol (ip_hdr->ip_p));
-  case ETHERTYPE_IPV6:
-    ip_hdr = (struct ip *) (pkt + sizeof (struct ether_header));
-    printf ("\t\t\t\t"
+  } else {
+    printf ("\t"
             "%s > %s length: %d, protocol: %s\n",
-            inet_ntop (AF_INET6, &(ip_hdr->ip_src), ip_src, sizeof (ip_src)),
-            inet_ntop (AF_INET6, &(ip_hdr->ip_dst), ip_dst, sizeof (ip_dst)),
+            inet_ntop (af, &(ip_hdr->ip_src), ip_src, sizeof (ip_src)),
+            inet_ntop (af, &(ip_hdr->ip_dst), ip_dst, sizeof (ip_dst)),
             ntohs (ip_hdr->ip_len), get_protocol (ip_hdr->ip_p));
-    break;
   }
 }
 
-void
-print_metadata_actions (const struct pcap_metadata *metadata)
+const char *
+get_metadata_next_actions (unsigned int *actions)
 {
-  if (metadata->actions & (1 << ALERT)) {
-    printf ("Alert ");
+  if (*actions & (1 << ALERT)) {
+    *actions &= ~(1 << ALERT);
+    return "Alert";
   }
-  if (metadata->actions & (1 << DROP)) {
-    printf ("Drop ");
+  if (*actions & (1 << DROP)) {
+    *actions &= ~(1 << DROP);
+    return "Drop";
   }
-  if (metadata->actions & (1 << DENY)) {
-    printf ("Deny ");
+  if (*actions & (1 << DENY)) {
+    *actions &= ~(1 << DENY);
+    return "Deny";
   }
-  if (metadata->actions & (1 << LOG)) {
-    printf ("Log ");
+  if (*actions & (1 << LOG)) {
+    *actions &= ~(1 << LOG);
+    return "Log";
   }
-  if (metadata->actions & (1 << PASS)) {
-    printf ("Pass ");
+  if (*actions & (1 << PASS)) {
+    *actions &= ~(1 << PASS);
+    return "Pass";
   }
-  if (metadata->actions & (1 << REJECT)) {
-    printf ("Reject ");
+  if (*actions & (1 << REJECT)) {
+    *actions &= ~(1 << REJECT);
+    return "Reject";
   }
-  if (metadata->actions & (1 << MIRROR)) {
-    printf ("Mirror ");
+  if (*actions & (1 << MIRROR)) {
+    *actions &= ~(1 << MIRROR);
+    return "Mirror";
   }
-  if (metadata->actions & (1 << VRF_TRANSLATE)) {
-    printf ("Vrf Translate ");
+  if (*actions & (1 << VRF_TRANSLATE)) {
+    *actions &= ~(1 << VRF_TRANSLATE);
+    return "Vrf Translate";
   }
-  if (metadata->actions & (1 << TRAP)) {
-    printf ("Trap ");
+  if (*actions & (1 << TRAP)) {
+    *actions &= ~(1 << TRAP);
+    return "Trap";
   }
-  if (metadata->actions & (1 << IMPLICIT_DENY)) {
-    printf ("Implicit Deny ");
+  if (*actions & (1 << IMPLICIT_DENY)) {
+    *actions &= ~(1 << IMPLICIT_DENY);
+    return "Implicit Deny";
   }
-  if (metadata->actions & (1 << UNKNOWN)) {
-    printf ("Unknown ");
+  if (*actions & (1 << UNKNOWN)) {
+    *actions &= ~(1 << UNKNOWN);
+    return "Unknown";
   }
+
+  return "";
+}
+
+const char
+*host_ip_str(const struct pcap_metadata *metadata, char *ip, int size) {
+  if (metadata->ip_version == IPV4) {
+    return inet_ntop (AF_INET, &(metadata->host.addr_v4), ip, size);
+  }
+  return inet_ntop (AF_INET6, &(metadata->host.addr_v6), ip, size);
 }
 
 void
-print_metadata (const struct pcap_metadata *metadata)
+print_metadata (const struct pcap_metadata *metadata, int verbose)
 {
-  const char *src, *dst;
+  const char *src, *dst, *action;
+  unsigned int actions, n;
   char ip[BUFSIZ];
 
   if (metadata->direction == INGRESS) {
@@ -331,21 +374,44 @@ print_metadata (const struct pcap_metadata *metadata)
     dst = metadata->src_vn;
   }
 
-  if (metadata->ip_version == IPV4) {
+  actions = metadata->actions;
+  if (verbose == JSON_OUTPUT) {
+    printf("\"vn_src\": \"%s\", \"vn_dst\": \"%s\", "
+           "\"host\": \"%s\", \"actions\": [", src, dst,
+           host_ip_str(metadata, ip, sizeof (ip)));
+
+    n = 0;
+    while(actions) {
+      action = get_metadata_next_actions(&actions);
+      if (n) {
+          printf(", \"%s\"", action);
+      } else {
+          printf("\"%s\"", action);
+          n = 1;
+      }
+    }
+    printf("], ");
+  } else {
     printf ("%s > %s captured from: %s, action: ", src, dst,
-            inet_ntop (AF_INET, &(metadata->host.addr_v4), ip, sizeof (ip)));
-    print_metadata_actions (metadata);
-  }
-  else {
-    printf ("%s > %s captured from: %s, action: ", src, dst,
-            inet_ntop (AF_INET6, &(metadata->host.addr_v6), ip, sizeof (ip)));
-    print_metadata_actions (metadata);
+            host_ip_str(metadata, ip, sizeof (ip)));
+
+    n = 0;
+    while(actions) {
+      action = get_metadata_next_actions(&actions);
+      if (n) {
+          printf(", %s", action);
+      } else {
+          printf("%s", action);
+          n = 1;
+      }
+    }
+    printf ("\n");
   }
 }
 
 void
 print_capture (const struct pcap_metadata *metadata, const char *pkt,
-               unsigned int len)
+               unsigned int len, int verbose)
 {
   struct timeval now;
   struct tm *loctime;
@@ -355,13 +421,18 @@ print_capture (const struct pcap_metadata *metadata, const char *pkt,
   loctime = gmtime (&(now.tv_sec));
   strftime (bufftime, BUFSIZ, "%H:%M:%S", loctime);
 
-  printf ("%s.%lu ", bufftime, now.tv_usec);
+  if (verbose == JSON_OUTPUT) {
+    printf ("{\"timestamp\": \"%s.%lu\", ", bufftime, now.tv_usec);
+  } else {
+    printf ("%s.%lu ", bufftime, now.tv_usec);
+  }
 
-  print_metadata (metadata);
-  printf ("\n");
+  print_metadata (metadata, verbose);
+  print_pkt (pkt, len, verbose);
 
-  print_pkt (pkt, len);
-  printf ("\n");
+  if (verbose == JSON_OUTPUT) {
+    printf("}\n");
+  }
 }
 
 void
@@ -391,7 +462,7 @@ forward (int usock, int fsock, const struct sockaddr_ll *fout, int verbose)
 
     len = r - (ptr - pkt);
     if (verbose) {
-      print_capture (&metadata, ptr, len);
+      print_capture (&metadata, ptr, len, verbose);
     }
 
     if (fsock) {
@@ -416,6 +487,7 @@ main (int argc, char **argv)
     {"intf", 1, 0, 'i'},
     {"port", 1, 0, 'p'},
     {"verbose", 0, 0, 'v'},
+    {"json", 0, 0, 'j'},
     {"help", 0, 0, 'h'},
     {NULL, 0, 0, 0}
   };
@@ -427,7 +499,7 @@ main (int argc, char **argv)
   char *end;
 
   while (1) {
-    c = getopt_long (argc, argv, "i:p:vh", long_options, &i);
+    c = getopt_long (argc, argv, "i:p:vjh", long_options, &i);
     if (c == -1) {
       break;
     }
@@ -444,7 +516,11 @@ main (int argc, char **argv)
       port = a2i;
       break;
     case 'v':
-      verbose = 1;
+      if (!verbose)
+          verbose = TEXT_OUTPUT;
+      break;
+    case 'j':
+      verbose = JSON_OUTPUT;
       break;
     case 'h':
     default:
